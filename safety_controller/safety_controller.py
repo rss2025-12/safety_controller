@@ -14,38 +14,42 @@
 
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import Float32
+from sensor_msgs.msg import LaserScan
+from ackermann_msgs.msg import AckermannDriveStamped
 
-from std_msgs.msg import String
 
-
-class MinimalPublisher(Node):
+class SafetyPublisher(Node):
 
     def __init__(self):
         super().__init__('safety_controller')
-        self.publisher_ = self.create_publisher(String, 'topic', 10)
-        timer_period = 0.5  # seconds
-        self.timer = self.create_timer(timer_period, self.timer_callback)
-        self.i = 0
 
-    def timer_callback(self):
-        msg = String()
-        msg.data = 'Hello World: %d' % self.i
-        self.publisher_.publish(msg)
-        self.get_logger().info('Publishing: "%s"' % msg.data)
-        self.i += 1
+        self.subscriber = self.create_subscription(LaserScan, 'scan', self.listener_callback, 10)
+        self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/high_level/input/nav_1', 10)
+
+    def listener_callback(self, msg):
+        ranges = msg.ranges
+        front = ranges[45:55]
+
+        if min(front) < 0.5: # Ideally probably velocity
+            acker = AckermannDriveStamped()
+            acker.header.stamp = self.get_clock().now().to_msg()
+            acker.drive.speed = 0
+            acker.drive.acceleration = 0.0
+            acker.drive.jerk = 0.0
+            acker.drive.steering_angle = 0.0
+            acker.drive.steering_angle_velocity = 0.0
+            self.drive_publisher.publish(acker)
+            self.get_logger().info("Safety stop.")
 
 
 def main(args=None):
     rclpy.init(args=args)
-
-    minimal_publisher = MinimalPublisher()
-
-    rclpy.spin(minimal_publisher)
+    safety_controller = SafetyPublisher()
+    rclpy.spin(safety_controller)
 
     # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
-    minimal_publisher.destroy_node()
+    safety_controller.destroy_node()
     rclpy.shutdown()
 
 
