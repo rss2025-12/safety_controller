@@ -25,11 +25,14 @@ class SafetyPublisher(Node):
         super().__init__('safety_controller')
 
         self.subscriber = self.create_subscription(LaserScan, 'scan', self.listener_callback, 10)
-        self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/high_level/input/nav_1', 10)
+        # self.subscriber: skill issue
+        self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/low_level/input/safety', 10)
 
     def listener_callback(self, msg):
         ranges = msg.ranges
-        front = ranges[45:55]
+        mid_point = len(ranges) // 2
+        front_spread = 5
+        front = ranges[mid_point - front_spread: mid_point + front_spread] # TODO: check which angels they correlate to
 
         if min(front) < 0.5: # Ideally probably velocity
             acker = AckermannDriveStamped()
@@ -39,7 +42,7 @@ class SafetyPublisher(Node):
             acker.drive.jerk = 0.0
             acker.drive.steering_angle = 0.0
             acker.drive.steering_angle_velocity = 0.0
-            self.drive_publisher.publish(acker)
+            self.publisher.publish(acker)
             self.get_logger().info("Safety stop.")
 
 
