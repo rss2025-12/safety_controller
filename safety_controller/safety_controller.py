@@ -37,7 +37,7 @@ class SafetyPublisher(Node):
         if min(front) < 0.5: # Ideally probably velocity
             acker = AckermannDriveStamped()
             acker.header.stamp = self.get_clock().now().to_msg()
-            acker.drive.speed = 0
+            acker.drive.speed = 0.0
             acker.drive.acceleration = 0.0
             acker.drive.jerk = 0.0
             acker.drive.steering_angle = 0.0
