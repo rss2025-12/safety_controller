@@ -17,33 +17,51 @@ from rclpy.node import Node
 from std_msgs.msg import Float32
 from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped
+import math
 
 
 class SafetyPublisher(Node):
-
     def __init__(self):
         super().__init__('safety_controller')
 
-        self.subscriber = self.create_subscription(LaserScan, 'scan', self.listener_callback, 10)
-        # self.subscriber: skill issue
+        self.VELOCITY = 0.0
+
+        ### Publishers and subscribers ###
+        self.scan_sub = self.create_subscription(LaserScan, 'scan', self.listener_callback, 10)
+        self.ackerman_sub = self.create_subscription(AckermannDriveStamped, 'vesc/high_level/ackermann_cmd', self.acker_callback, 10)
         self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/low_level/input/safety', 10)
 
-    def listener_callback(self, msg):
-        ranges = msg.ranges
-        mid_point = len(ranges) // 2
-        front_spread = 5
-        front = ranges[mid_point - front_spread: mid_point + front_spread] # TODO: check which angels they correlate to
+    def acker_callback(self, msg):
+        self.VELOCITY = msg.drive.speed
 
-        if min(front) < 0.5: # Ideally probably velocity
-            acker = AckermannDriveStamped()
-            acker.header.stamp = self.get_clock().now().to_msg()
-            acker.drive.speed = 0.0
-            acker.drive.acceleration = 0.0
-            acker.drive.jerk = 0.0
-            acker.drive.steering_angle = 0.0
-            acker.drive.steering_angle_velocity = 0.0
-            self.publisher.publish(acker)
-            self.get_logger().info("Safety stop.")
+    def listener_callback(self, msg):
+        def deg_to_index(deg):
+            return int((deg * math.pi / 180 - angle_min) / angle_increment)
+
+        # Constants
+        angle_min = msg.angle_min
+        angle_increment = msg.angle_increment
+        ranges = msg.ranges
+        front_spread = 5
+        SAFE_DECELERATION = 1.0
+        stopping_distance = (self.VELOCITY ** 2) / (2 * SAFE_DECELERATION)
+
+        # Logic
+        front = ranges[deg_to_index(-front_spread): deg_to_index(front_spread)]
+        if min(front) < stopping_distance:
+            self.stop_vehicle()
+
+    def stop_vehicle(self):
+        acker = AckermannDriveStamped()
+        acker.header.stamp = self.get_clock().now().to_msg()
+        acker.drive.speed = 0.0
+        acker.drive.acceleration = 0.0
+        acker.drive.jerk = 0.0
+        acker.drive.steering_angle = 0.0
+        acker.drive.steering_angle_velocity = 0.0
+        self.publisher.publish(acker)
+
+        self.get_logger().info("Safety stop.")
 
 
 def main(args=None):
