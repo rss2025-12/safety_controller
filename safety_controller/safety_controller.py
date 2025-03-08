@@ -17,6 +17,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float32
 from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped
+import math
 
 
 class SafetyPublisher(Node):
@@ -25,16 +26,21 @@ class SafetyPublisher(Node):
         super().__init__('safety_controller')
 
         self.subscriber = self.create_subscription(LaserScan, 'scan', self.listener_callback, 10)
-        # self.subscriber: skill issue
         self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/low_level/input/safety', 10)
+        self.safety_dist = 0.8
+        self.front_spread = 5
 
     def listener_callback(self, msg):
+        def deg_to_index(deg):
+            return int((deg * math.pi / 180 - angle_min) / angle_increment)
+
+        angle_min = msg.angle_min
+        angle_increment = msg.angle_increment
         ranges = msg.ranges
         mid_point = len(ranges) // 2
-        front_spread = 5
-        front = ranges[mid_point - front_spread: mid_point + front_spread] # TODO: check which angels they correlate to
+        front = ranges[deg_to_index(-self.front_spread):deg_to_index(self.front_spread)]
 
-        if min(front) < 0.5: # Ideally probably velocity
+        if min(front) < self.safety_dist: # Ideally probably velocity
             acker = AckermannDriveStamped()
             acker.header.stamp = self.get_clock().now().to_msg()
             acker.drive.speed = 0.0
