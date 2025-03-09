@@ -27,8 +27,8 @@ class SafetyPublisher(Node):
 
         self.subscriber = self.create_subscription(LaserScan, 'scan', self.listener_callback, 10)
         self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/low_level/input/safety', 10)
-        self.safety_dist = 0.8
-        self.front_spread = 5
+        self.safety_dist = 0.6
+        self.front_spread = 8
 
     def listener_callback(self, msg):
         def deg_to_index(deg):
