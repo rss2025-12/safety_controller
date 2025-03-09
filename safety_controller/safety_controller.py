@@ -31,7 +31,7 @@ class SafetyPublisher(Node):
         self.subscriber = self.create_subscription(LaserScan, 'scan', self.listener_callback, 10)
         self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/low_level/input/safety', 10)
 
-        self.safety_dist = 0.65 # 0.6
+        self.safety_dist = 0.6 # 0.65
         self.front_spread = 8
         self.csv_file = "safety_controller_data.csv"
 
