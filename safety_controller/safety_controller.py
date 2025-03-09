@@ -31,7 +31,7 @@ class SafetyPublisher(Node):
         self.subscriber = self.create_subscription(LaserScan, 'scan', self.listener_callback, 10)
         self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/low_level/input/safety', 10)
 
-        self.safety_dist = 0.6
+        self.safety_dist = 0.65 # 0.6
         self.front_spread = 8
         self.csv_file = "safety_controller_data.csv"
 
@@ -58,9 +58,9 @@ class SafetyPublisher(Node):
 
             self.safety_controller_data(self.csv_file, min(front))
     
-    def safety_controller_data(csv_filename, distance, interval=0.5):
+    def safety_controller_data(self, csv_filename, distance, interval=0.5):
         # Check if the file already exists so we can write header only once.
-        file_exists = os.path.exists(csv_filename) and os.stat(csv_filename).st_size > 0
+        file_exists = os.path.exists(csv_filename) 
         
         with open(csv_filename, 'a', newline='') as csvfile:
             writer = csv.writer(csvfile)
@@ -71,11 +71,12 @@ class SafetyPublisher(Node):
             # Get the current time stamp in a readable format.
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             
-            # Write the new row to the CSV.
-            writer.writerow([timestamp, distance])
+            if (time.localtime().tm_sec % 1 == 0):
+                # Write the new row to the CSV.
+                writer.writerow([timestamp, distance])
             
             # Wait for the specified interval before the next log.
-            time.sleep(interval)
+            # time.sleep(interval)
 
 
 def main(args=None):
