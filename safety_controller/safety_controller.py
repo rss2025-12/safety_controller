@@ -20,15 +20,17 @@ from ackermann_msgs.msg import AckermannDriveStamped
 import math
 
 
-class SafetyPublisher(Node):
+class SafetyController(Node):
     def __init__(self):
         super().__init__('safety_controller')
 
-        self.VELOCITY = 0.0
+        self.VELOCITY = None
+        self.STOP_COEFFICIENT = 0.6
+        # self.DECELERATION = 0.5
 
         ### Publishers and subscribers ###
         self.scan_sub = self.create_subscription(LaserScan, 'scan', self.listener_callback, 10)
-        self.ackerman_sub = self.create_subscription(AckermannDriveStamped, 'vesc/high_level/ackermann_cmd', self.acker_callback, 10)
+        self.ackerman_sub = self.create_subscription(AckermannDriveStamped, 'vesc/low_level/ackermann_cmd', self.acker_callback, 10)
         self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/low_level/input/safety', 10)
 
     def acker_callback(self, msg):
@@ -42,9 +44,12 @@ class SafetyPublisher(Node):
         angle_min = msg.angle_min
         angle_increment = msg.angle_increment
         ranges = msg.ranges
-        front_spread = 5
-        SAFE_DECELERATION = 1.0
-        stopping_distance = (self.VELOCITY ** 2) / (2 * SAFE_DECELERATION)
+        front_spread = 8
+        if self.VELOCITY is None:
+            self.stop_vehicle()
+            return
+        stopping_distance = self.VELOCITY * self.STOP_COEFFICIENT
+        # stopping_distance = (self.VELOCITY ** 2) / (2 * self.DECELERATION)
 
         # Logic
         front = ranges[deg_to_index(-front_spread): deg_to_index(front_spread)]
@@ -66,7 +71,7 @@ class SafetyPublisher(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    safety_controller = SafetyPublisher()
+    safety_controller = SafetyController()
     rclpy.spin(safety_controller)
 
     # Destroy the node explicitly
