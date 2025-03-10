@@ -17,46 +17,61 @@ from rclpy.node import Node
 from std_msgs.msg import Float32
 from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped
-import math
-import csv
-import os
-import time
+import math, csv, os, time
 
 
-class SafetyPublisher(Node):
-
+class SafetyController(Node):
     def __init__(self):
         super().__init__('safety_controller')
 
-        self.subscriber = self.create_subscription(LaserScan, 'scan', self.listener_callback, 10)
-        self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/low_level/input/safety', 10)
-
-        self.safety_dist = 0.6 # 0.65
+        self.VELOCITY = None
+        self.STOP_COEFFICIENT = 0.6 # 0.65
         self.front_spread = 8
+        # self.DECELERATION = 0.5
         self.csv_file = "safety_controller_data.csv"
 
+        ### Publishers and subscribers ###
+        self.scan_sub = self.create_subscription(LaserScan, 'scan', self.listener_callback, 10)
+        self.ackerman_sub = self.create_subscription(AckermannDriveStamped, 'vesc/high_level/ackermann_cmd', self.acker_callback, 10)
+        self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/low_level/input/safety', 10)
+
+        
+    def acker_callback(self, msg):
+        self.VELOCITY = msg.drive.speed
+
+        
     def listener_callback(self, msg):
         def deg_to_index(deg):
             return int((deg * math.pi / 180 - angle_min) / angle_increment)
+        
+        if self.VELOCITY is None:
+            return
 
+        # Constants
         angle_min = msg.angle_min
         angle_increment = msg.angle_increment
         ranges = msg.ranges
-        mid_point = len(ranges) // 2
+        stopping_distance = self.VELOCITY * self.STOP_COEFFICIENT
+        # stopping_distance = (self.VELOCITY ** 2) / (2 * self.DECELERATION)
+
+        # Logic
         front = ranges[deg_to_index(-self.front_spread):deg_to_index(self.front_spread)]
-
-        if min(front) < self.safety_dist: # Ideally probably velocity
-            acker = AckermannDriveStamped()
-            acker.header.stamp = self.get_clock().now().to_msg()
-            acker.drive.speed = 0.0
-            acker.drive.acceleration = 0.0
-            acker.drive.jerk = 0.0
-            acker.drive.steering_angle = 0.0
-            acker.drive.steering_angle_velocity = 0.0
-            self.publisher.publish(acker)
-            self.get_logger().info("Safety stop.")
-
+        if min(front) < stopping_distance:
             self.safety_controller_data(self.csv_file, min(front))
+            self.stop_vehicle()
+
+            
+    def stop_vehicle(self):
+        acker = AckermannDriveStamped()
+        acker.header.stamp = self.get_clock().now().to_msg()
+        acker.drive.speed = 0.0
+        acker.drive.acceleration = 0.0
+        acker.drive.jerk = 0.0
+        acker.drive.steering_angle = 0.0
+        acker.drive.steering_angle_velocity = 0.0
+        self.publisher.publish(acker)
+        self.get_logger().info("Safety stop.")
+    
     
     def safety_controller_data(self, csv_filename, distance, interval=0.5):
         # Check if the file already exists so we can write header only once.
@@ -81,7 +96,7 @@ class SafetyPublisher(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    safety_controller = SafetyPublisher()
+    safety_controller = SafetyController()
     rclpy.spin(safety_controller)
 
     # Destroy the node explicitly
