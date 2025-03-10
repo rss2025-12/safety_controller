@@ -17,7 +17,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float32
 from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped
-import math
+import math, csv, os, time
 
 
 class SafetyController(Node):
@@ -25,37 +25,42 @@ class SafetyController(Node):
         super().__init__('safety_controller')
 
         self.VELOCITY = None
-        self.STOP_COEFFICIENT = 0.6
+        self.STOP_COEFFICIENT = 0.6 # 0.65
+        self.front_spread = 8
         # self.DECELERATION = 0.5
+        self.csv_file = "safety_controller_data.csv"
 
         ### Publishers and subscribers ###
         self.scan_sub = self.create_subscription(LaserScan, 'scan', self.listener_callback, 10)
-        self.ackerman_sub = self.create_subscription(AckermannDriveStamped, 'vesc/low_level/ackermann_cmd', self.acker_callback, 10)
+        self.ackerman_sub = self.create_subscription(AckermannDriveStamped, 'vesc/high_level/ackermann_cmd', self.acker_callback, 10)
         self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/low_level/input/safety', 10)
 
+        
     def acker_callback(self, msg):
         self.VELOCITY = msg.drive.speed
 
+        
     def listener_callback(self, msg):
         def deg_to_index(deg):
             return int((deg * math.pi / 180 - angle_min) / angle_increment)
+        
+        if self.VELOCITY is None:
+            return
 
         # Constants
         angle_min = msg.angle_min
         angle_increment = msg.angle_increment
         ranges = msg.ranges
-        front_spread = 8
-        if self.VELOCITY is None:
-            self.stop_vehicle()
-            return
         stopping_distance = self.VELOCITY * self.STOP_COEFFICIENT
         # stopping_distance = (self.VELOCITY ** 2) / (2 * self.DECELERATION)
 
         # Logic
-        front = ranges[deg_to_index(-front_spread): deg_to_index(front_spread)]
+        front = ranges[deg_to_index(-self.front_spread):deg_to_index(self.front_spread)]
         if min(front) < stopping_distance:
+            self.safety_controller_data(self.csv_file, min(front))
             self.stop_vehicle()
 
+            
     def stop_vehicle(self):
         acker = AckermannDriveStamped()
         acker.header.stamp = self.get_clock().now().to_msg()
@@ -65,8 +70,28 @@ class SafetyController(Node):
         acker.drive.steering_angle = 0.0
         acker.drive.steering_angle_velocity = 0.0
         self.publisher.publish(acker)
-
         self.get_logger().info("Safety stop.")
+    
+    
+    def safety_controller_data(self, csv_filename, distance, interval=0.5):
+        # Check if the file already exists so we can write header only once.
+        file_exists = os.path.exists(csv_filename) 
+        
+        with open(csv_filename, 'a', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            # Write header if file is new or empty.
+            if not file_exists:
+                writer.writerow(["timestamp", "plot_distance"])
+            
+            # Get the current time stamp in a readable format.
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            
+            if (time.localtime().tm_sec % 1 == 0):
+                # Write the new row to the CSV.
+                writer.writerow([timestamp, distance])
+            
+            # Wait for the specified interval before the next log.
+            # time.sleep(interval)
 
 
 def main(args=None):
