@@ -14,7 +14,7 @@
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32, Bool
 from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped
 import math, csv, os, time
@@ -33,12 +33,31 @@ class SafetyController(Node):
         ### Publishers and subscribers ###
         self.scan_sub = self.create_subscription(LaserScan, 'scan', self.listener_callback, 10)
         self.ackerman_sub = self.create_subscription(AckermannDriveStamped, 'vesc/high_level/ackermann_cmd', self.acker_callback, 10)
+        self.redlight_sub = self.create_subscription(Bool, '/redlight', self.redlight_callback, 10)
+        self.traffic_light_sub = self.create_subscription(Bool, '/traffic_light_seen', self.traffic_light_callback, 1)
         self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/low_level/input/safety', 10)
 
+        self.light_detector_red = False
+        self.traffic_light_seen = False
         
     def acker_callback(self, msg):
         self.VELOCITY = msg.drive.speed
 
+    def redlight_callback(self, msg):
+        # self.get_logger().info(f'Traffic light msg data is {msg.data}')
+        # if msg.data:
+            # self.get_logger().info("Traffic light stop.")
+        self.light_detector_red = msg.data
+            # self.stop_vehicle()
+
+    def traffic_light_callback(self, msg):
+        self.traffic_light_seen = msg.data
+
+    def is_red_light(self):
+        if self.light_detector_red and self.traffic_light_seen:
+            return True
+        else:
+            return False
         
     def listener_callback(self, msg):
         def deg_to_index(deg):
@@ -59,7 +78,10 @@ class SafetyController(Node):
         if min(front) < stopping_distance:
             self.safety_controller_data(self.csv_file, min(front))
             self.stop_vehicle()
-
+            self.get_logger().info("Safety stop.")
+        if self.is_red_light():
+            self.stop_vehicle()
+            # self.get_logger().info("Traffic light stop.")
             
     def stop_vehicle(self):
         acker = AckermannDriveStamped()
@@ -70,7 +92,7 @@ class SafetyController(Node):
         acker.drive.steering_angle = 0.0
         acker.drive.steering_angle_velocity = 0.0
         self.publisher.publish(acker)
-        self.get_logger().info("Safety stop.")
+        # self.get_logger().info("Safety stop.")
     
     
     def safety_controller_data(self, csv_filename, distance, interval=0.5):
