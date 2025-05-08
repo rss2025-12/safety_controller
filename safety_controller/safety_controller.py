@@ -14,7 +14,7 @@
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float32, Bool
+from std_msgs.msg import Float32, Bool, Int32
 from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped
 import math, csv, os, time
@@ -25,7 +25,7 @@ class SafetyController(Node):
         super().__init__('safety_controller')
 
         self.VELOCITY = None
-        self.STOP_COEFFICIENT = 0.6 # 0.65
+        self.STOP_COEFFICIENT = 0.8 # 0.65
         self.front_spread = 8
         # self.DECELERATION = 0.5
         self.csv_file = "safety_controller_data.csv"
@@ -36,10 +36,15 @@ class SafetyController(Node):
         self.redlight_sub = self.create_subscription(Bool, '/redlight', self.redlight_callback, 10)
         self.traffic_light_sub = self.create_subscription(Bool, '/traffic_light_seen', self.traffic_light_callback, 1)
         self.publisher = self.create_publisher(AckermannDriveStamped, 'vesc/low_level/input/safety', 10)
+        self.banana_id_sub = self.create_subscription(Int32, '/banana_id', self.banana_callback, 1)
 
         self.light_detector_red = False
         self.traffic_light_seen = False
+        self.banana_id = 0
         
+    def banana_callback(self, msg):
+        self.banana_id = msg.data
+
     def acker_callback(self, msg):
         self.VELOCITY = msg.drive.speed
 
@@ -54,7 +59,8 @@ class SafetyController(Node):
         self.traffic_light_seen = msg.data
 
     def is_red_light(self):
-        if self.light_detector_red and self.traffic_light_seen:
+        # if self.light_detector_red and self.traffic_light_seen:
+        if self.light_detector_red and self.banana_id < 1:
             return True
         else:
             return False
@@ -81,7 +87,7 @@ class SafetyController(Node):
             self.get_logger().info("Safety stop.")
         if self.is_red_light():
             self.stop_vehicle()
-            # self.get_logger().info("Traffic light stop.")
+            self.get_logger().info("Traffic light stop.")
             
     def stop_vehicle(self):
         acker = AckermannDriveStamped()
