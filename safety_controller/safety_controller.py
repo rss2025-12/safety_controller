@@ -41,7 +41,7 @@ class SafetyController(Node):
         self.light_detector_red = False
         self.traffic_light_seen = False
         self.banana_id = 0
-        
+
     def banana_callback(self, msg):
         self.banana_id = msg.data
 
@@ -64,11 +64,11 @@ class SafetyController(Node):
             return True
         else:
             return False
-        
+
     def listener_callback(self, msg):
         def deg_to_index(deg):
             return int((deg * math.pi / 180 - angle_min) / angle_increment)
-        
+
         if self.VELOCITY is None:
             return
 
@@ -82,13 +82,13 @@ class SafetyController(Node):
         # Logic
         front = ranges[deg_to_index(-self.front_spread):deg_to_index(self.front_spread)]
         if min(front) < stopping_distance:
-            self.safety_controller_data(self.csv_file, min(front))
+            # self.safety_controller_data(self.csv_file, min(front))
             self.stop_vehicle()
-            self.get_logger().info("Safety stop.")
+            # self.get_logger().info("Safety stop.")
         if self.is_red_light():
             self.stop_vehicle()
             self.get_logger().info("Traffic light stop.")
-            
+
     def stop_vehicle(self):
         acker = AckermannDriveStamped()
         acker.header.stamp = self.get_clock().now().to_msg()
@@ -99,25 +99,25 @@ class SafetyController(Node):
         acker.drive.steering_angle_velocity = 0.0
         self.publisher.publish(acker)
         # self.get_logger().info("Safety stop.")
-    
-    
-    def safety_controller_data(self, csv_filename, distance, interval=0.5):
+
+
+    # def safety_controller_data(self, csv_filename, distance, interval=0.5):
         # Check if the file already exists so we can write header only once.
-        file_exists = os.path.exists(csv_filename) 
-        
-        with open(csv_filename, 'a', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            # Write header if file is new or empty.
-            if not file_exists:
-                writer.writerow(["timestamp", "plot_distance"])
-            
-            # Get the current time stamp in a readable format.
-            timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            
-            if (time.localtime().tm_sec % 1 == 0):
-                # Write the new row to the CSV.
-                writer.writerow([timestamp, distance])
-            
+        # file_exists = os.path.exists(csv_filename)
+
+        # with open(csv_filename, 'a', newline='') as csvfile:
+        #     writer = csv.writer(csvfile)
+        #     # Write header if file is new or empty.
+        #     if not file_exists:
+        #         writer.writerow(["timestamp", "plot_distance"])
+
+        #     # Get the current time stamp in a readable format.
+        #     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
+        #     if (time.localtime().tm_sec % 1 == 0):
+        #         # Write the new row to the CSV.
+        #         writer.writerow([timestamp, distance])
+
             # Wait for the specified interval before the next log.
             # time.sleep(interval)
 
